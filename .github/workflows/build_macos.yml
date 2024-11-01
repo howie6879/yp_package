@@ -1,0 +1,64 @@
+name: Test build
+
+on:
+  release:
+    types: [created]
+
+  # Allows you to run this workflow manually from the Actions tab of the repository
+  workflow_dispatch:
+
+# flet build macos --verbose --build-number=1 --build-version=1.0.0
+env:
+  PYTHON_VERSION: 3.11.9
+  FLUTTER_VERSION: 3.24.0
+
+jobs:
+  build-macos:
+    strategy:
+      matrix:
+        os: [macos-14] # 定义多个 macOS 版本，macos-14是m1芯片即arm64
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Flet Build macOS
+        run: |
+          flutter config --no-analytics
+          flet build macos --verbose
+
+      - name: Package .app folder
+        run: |
+          cd build/macos
+          tar -czf test.tar.gz test.app
+          cd ../
+          cd ../
+          mkdir dist
+          cp build/macos/test.tar.gz dist/test.tar.gz
+
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./dist/test.tar.gz
+          asset_name: test-${{ matrix.os }}.tar.gz
+          asset_content_type: application/octet-stream
